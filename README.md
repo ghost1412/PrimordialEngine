@@ -69,5 +69,32 @@ You are the **Creator.** You do not just watch; you interfere.
 
 ---
 
+---
+
+## 🚀 How to Run
+
+1.  **Start the Server**:
+    - Run the provided batch script to start a local Python web server:
+      ```powershell
+      .\run_simulation.bat
+      ```
+2.  **Access the Simulation**:
+    - Open your browser and navigate to: [http://localhost:8000](http://localhost:8000)
+
+## 🔮 Ollama AI Integration
+
+To enable the "LLM Consciousness" for your creatures:
+
+1.  **Ensure Ollama is running**: `ollama serve`
+2.  **Pull the Model**: The engine is configured to use `gemma3:12b` (or `tinyllama`).
+    ```bash
+    ollama pull gemma3:12b
+    ```
+3.  **Activate in Sim**:
+    - Click the **🔮 Consciousness** button in the "GOD MODE" sidebar.
+    - Select a creature to observe its internal monologue and goals.
+
+---
+
 ### *Waste your time today. Watch the void breathe.*
 > **Running on: http://localhost:8000**

@@ -5,7 +5,7 @@
  */
 
 class OllamaBrain {
-    constructor(model = "tinyllama") {
+    constructor(model = "gemma3:12b") {
         this.model = model;
         this.endpoint = "http://localhost:11434/api/chat";
         this.isThinking = false;

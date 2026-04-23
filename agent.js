@@ -9,8 +9,8 @@ class Agent {
         this.pos = { x, y };
         this.vel = { x: 0, y: 0 };
         this.angle = Math.random() * Math.PI * 2;
-        this.energy = 180;
-        this.maxEnergy = 250; // New: Satiety limit
+        this.energy = 250;
+        this.maxEnergy = 300; // Increased capacity
         this.age = 0;
         this.dead = false;
         this.cause = "";
@@ -277,12 +277,12 @@ class Agent {
             this.chaseTarget = null;
             if (this.foodMemory.length > 3) this.foodMemory.shift();
             this.foodMemory.push({...nearestFoodPos});
-        } else if (this.energy > 60 && this.age > 400 && this.pregnant === 0) {
+        } else if (this.energy > 50 && this.age > 100 && this.pregnant === 0) {
             // 2.5 MATING PURSUIT: Actively seek a partner
             const tribeThreshold = (worldTime < 3000 || world.agents.length < 80) ? 0.5 : 0.15;
             const mate = neighbors.find(n => 
                 Math.abs(n.tribeMarker - this.tribeMarker) < tribeThreshold &&
-                n.age > 200 && !n.dead && n.pregnant === 0
+                n.age > 100 && !n.dead && n.pregnant === 0
             );
             if (mate) {
                 const mateAngle = Math.atan2(mate.pos.y - this.pos.y, mate.pos.x - this.pos.x);
@@ -329,7 +329,7 @@ class Agent {
         this.pos.y += this.vel.y;
 
         // 4. Enhanced Metabolism (Science: Cost of Life)
-        let metabolism = 0.15; // Increased base burn for more dynamic foraging
+        let metabolism = 0.08; // Stabilized base burn
         if (world.temperature < 15 || world.temperature > 35) metabolism += 0.08; 
         
         // Size & Movement Penalties (Moving fast should be expensive!)
@@ -343,7 +343,7 @@ class Agent {
         if (this.emotions.fear > 0.6) metabolism *= 2.5; // High stress adrenaline burn
         
         // CHILD PROTECTION: Juveniles burn 50% less energy to give them a chance
-        if (this.age < 200) metabolism *= 0.5;
+        if (this.age < 100) metabolism *= 0.5;
         
         this.energy -= metabolism;
 

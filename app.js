@@ -693,13 +693,13 @@ function animate() {
         });
 
         // Mating (Gender-based with Pregnancy)
-        const isMature = a.age > 200;
+        const isMature = a.age > 100;
         if (isMature && a.energy > 20 && a.pregnant === 0 && agents.length < CONFIG.MAX_AGENTS) {
             // High energy agents can find mates further away
             const searchRange = a.energy > 200 ? 180 : 120;
             const mateNeighbors = spatialHash.getNearby(a.pos.x, a.pos.y, searchRange);
             const partner = mateNeighbors.find(p => {
-                const isMatch = p !== a && !p.dead && p.energy > 30 && p.age > 200;
+                const isMatch = p !== a && !p.dead && p.energy > 20 && p.age > 100;
                 const isFamily = a.parents.includes(p.id) || p.parents.includes(a.id);
                 // Early Sim Boost: In the first era or population crashes, tribes don't matter as much
                 const tribeThreshold = (worldTime < 3000 || agents.length < 80) ? 0.5 : 0.15;

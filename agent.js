@@ -62,6 +62,10 @@ class Agent {
         // Spatial Memory (remembers last 3 food locations)
         this.foodMemory = [];
         
+        // Roles (Civilization Dawn)
+        this.role = 'CITIZEN';
+        this.carryingFood = 0;    // Gatherers can carry resources
+        
         // Chase State
         this.chaseTarget = null;
 
@@ -83,8 +87,23 @@ class Agent {
         this.brain = brain || new NeuralNetworkV2(13, 16, 4);
     }
 
+    assignRole() {
+        if (this.age < 500) return; // Larvae are citizens
+        
+        const diet = this.phenotype.diet;
+        const aggro = this.phenotype.aggro;
+        const spirit = this.phenotype.spirituality;
+        
+        if (spirit > 0.7) this.role = 'PROPHET';
+        else if (aggro > 0.7) this.role = 'SOLDIER';
+        else if (diet < 0.3) this.role = 'GATHERER';
+        else this.role = 'CITIZEN';
+    }
+
     update(terrain, world) {
         this.age++;
+        if (this.age === 500) this.assignRole();
+        
         const inWater = terrain.isWater(this.pos.x, this.pos.y);
         
         // === SLEEP CYCLE ===
@@ -122,13 +141,15 @@ class Agent {
         let throttle = 0, turn = 0.5, broadcast = 0.5;
         let neighbors = [];
         let predator = null;
+        let rivals = 0;
 
         if (!this.sleeping) {
             this.emotions.hunger = 1 - (this.energy / 150);
             neighbors = world.getNeighbors ? world.getNeighbors(this.pos.x, this.pos.y, this.phenotype.sense) : world.agents;
-            predator = neighbors.find(n => n !== this && n.phenotype.diet > 0.6 && Math.abs(n.tribeMarker - this.tribeMarker) > 0.1);
+            predator = neighbors.find(n => n !== this && !n.dead && n.phenotype.diet > 0.6 && Math.abs(n.tribeMarker - this.tribeMarker) > 0.1);
             this.emotions.fear = predator ? 1.0 : (inWater === false && this.phenotype.lungs < 0.3 ? 0.8 : 0);
             
+            rivals = neighbors.filter(n => n !== this && !n.dead && Math.abs(n.tribeMarker - this.tribeMarker) > 0.1).length;
             const friend = neighbors.find(n => n !== this && Math.abs(n.tribeMarker - this.tribeMarker) < 0.1);
             this.emotions.affection = friend ? 0.8 : 0;
 
@@ -232,8 +253,6 @@ class Agent {
             nearestFoodPos = this.foodMemory[this.foodMemory.length - 1];
         }
         
-        // === DECISION ENGINE ===
-        // Find children nearby (for parental care)
         const myChild = this.childIds.length > 0 ? 
             neighbors.find(n => this.childIds.includes(n.id) && n.age < 400) : null;
         
@@ -259,6 +278,39 @@ class Agent {
                 }
             }
             if (this.bubbleTimer <= 0) { this.thoughtBubble = '🛡️'; this.bubbleTimer = 60; }
+        } else if (this.role === 'PROPHET') {
+            // PROPHET: Emit a shimmering buff to nearby tribe-mates
+            const allies = neighbors.filter(n => n !== this && Math.abs(n.tribeMarker - this.tribeMarker) < 0.1);
+            allies.forEach(a => {
+                a.energy += 0.05; // Blessing of the Prophet
+                if (world.worldTime % 20 === 0 && world.particles) {
+                    world.particles.push(new Particle(a.pos.x, a.pos.y, "gold", 0.5));
+                }
+            });
+            if (this.bubbleTimer <= 0) { this.thoughtBubble = '✨'; this.bubbleTimer = 120; }
+            throttle = 0.3; // Low activity, mostly meditating/blessing
+        } else if (this.role === 'SOLDIER' && rivals > 0) {
+            // SOLDIER: Prioritize pushing rivals out of territory
+            const enemy = neighbors.find(n => Math.abs(n.tribeMarker - this.tribeMarker) > 0.1);
+            if (enemy) {
+                const threatAngle = Math.atan2(enemy.pos.y - this.pos.y, enemy.pos.x - this.pos.x);
+                this.angle = this.angle * 0.1 + threatAngle * 0.9;
+                throttle = 1.0;
+                if (this.bubbleTimer <= 0) { this.thoughtBubble = '⚔️'; this.bubbleTimer = 40; }
+            }
+        } else if (this.role === 'GATHERER' && this.carryingFood > 0) {
+            // GATHERER: Return food to village cache
+            const cache = world.caches ? world.caches.find(c => Math.abs(c.tribe - this.tribeMarker) < 0.1) : null;
+            if (cache) {
+                const cacheAngle = Math.atan2(cache.pos.y - this.pos.y, cache.pos.x - this.pos.x);
+                this.angle = this.angle * 0.2 + cacheAngle * 0.8;
+                throttle = 0.8;
+                if (Math.hypot(cache.pos.x - this.pos.x, cache.pos.y - this.pos.y) < 30) {
+                    cache.energy += this.carryingFood;
+                    this.carryingFood = 0;
+                    if (this.bubbleTimer <= 0) { this.thoughtBubble = '📦'; this.bubbleTimer = 40; }
+                }
+            }
         } else if (this.phenotype.diet > 0.5 && nearestPreyPos && this.energy < 80) {
             // 2a. HUNT (Carnivores chase prey)
             const huntAngle = Math.atan2(nearestPreyPos.y - this.pos.y, nearestPreyPos.x - this.pos.x);
@@ -328,18 +380,38 @@ class Agent {
         this.pos.y += this.vel.y;
 
         // 4. Enhanced Metabolism (Science: Cost of Life)
-        let metabolism = 0.08; // Stabilized base burn
-        if (world.temperature < 15 || world.temperature > 35) metabolism += 0.08; 
+        let metabolism = 0.08; 
+        
+        // --- HARD BIOME LIMITS (Struggle & Scarcity update) ---
+        // 1. Extreme Temperature (Size determines survival)
+        if (world.worldTemperature < 10 && this.phenotype.size < 15) {
+            // Freezing to death (too small to retain heat)
+            metabolism += 1.5; 
+            if (this.bubbleTimer <= 0) { this.thoughtBubble = '🥶'; this.bubbleTimer = 20; }
+        } else if (world.worldTemperature > 35 && this.phenotype.size > 25) {
+            // Heatstroke (too large to cool down)
+            metabolism += 1.5;
+            if (this.bubbleTimer <= 0) { this.thoughtBubble = '🥵'; this.bubbleTimer = 20; }
+        } else if (world.worldTemperature < 15 || world.worldTemperature > 35) {
+            metabolism += 0.08; // Normal thermal stress
+        }
         
         // Size & Movement Penalties (Moving fast should be expensive!)
         metabolism += (this.phenotype.size / 20) * 0.08; 
         const speed = Math.hypot(this.vel.x, this.vel.y);
-        metabolism += speed * 0.05; // Reduced speed penalty
+        metabolism += speed * 0.05; 
         
-        if (inWater && this.phenotype.gills < 0.4) metabolism += 0.4; // Severe drowning
-        if (!inWater && this.phenotype.lungs < 0.4) metabolism += 0.5; // Severe suffocation
+        // 2. Lethal Terrain (Wrong respiratory organ = swift death)
+        if (inWater && this.phenotype.gills < 0.4) {
+             metabolism += 2.0; // Drowning is fast and lethal
+             if (this.bubbleTimer <= 0) { this.thoughtBubble = '🫧'; this.bubbleTimer = 20; }
+        }
+        if (!inWater && this.phenotype.lungs < 0.4) {
+             metabolism += 2.0; // Suffocating is fast and lethal
+             if (this.bubbleTimer <= 0) { this.thoughtBubble = '😵'; this.bubbleTimer = 20; }
+        }
         
-        if (this.emotions.fear > 0.6) metabolism *= 1.6; // Softer fear penalty (from 2.5)
+        if (this.emotions.fear > 0.6) metabolism *= 1.6; 
         
         // CHILD PROTECTION: Juveniles burn 50% less energy to give them a chance
         if (this.age < 100) metabolism *= 0.5;

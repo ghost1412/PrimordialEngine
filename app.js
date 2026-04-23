@@ -12,8 +12,8 @@ const logContent = document.getElementById('log-content');
 
 const CONFIG = {
     AGENTS: 120,
-    MAX_AGENTS: 400,
-    FOOD: 500,
+    MAX_AGENTS: 400, // Still a functional max for performance, but biomass is the real limit
+    GLOBAL_BIOMASS: 20000, // Maximum allowed energy in the system
     MUTATION: 0.1,
     SEA_LEVEL: 0.25,
     ERA_LENGTH: 5000 // Automatic Climate Shift every 5000 ticks
@@ -70,6 +70,9 @@ let agents = [];
 let foods = [];
 let nutrients = []; 
 let particles = []; // New Particle System
+let caches = [];    // Tribal Caches (Civilization Dawn)
+let fertilityGrid = []; // (Struggle & Scarcity)
+let activeTribesHistory = new Set(); // To track extinction permanently
 let worldTime = 0;
 let eraTimer = CONFIG.ERA_LENGTH;
 let worldTemperature = 25; // Standard Celsius
@@ -129,8 +132,10 @@ const PHERO_SCALE = 20;
 function initPheromones() {
     for (let y = 0; y < Math.ceil(canvas.height / PHERO_SCALE); y++) {
         pheromoneGrid[y] = [];
+        fertilityGrid[y] = [];
         for (let x = 0; x < Math.ceil(canvas.width / PHERO_SCALE); x++) {
             pheromoneGrid[y][x] = [0, 0, 0]; // [Food, Danger, Home]
+            fertilityGrid[y][x] = 1.0; // Base fertility 100%
         }
     }
 }
@@ -445,49 +450,86 @@ function animate() {
             ctx.fillText(name.toUpperCase(), centerX + 1, centerY + 1);
         }
     }
+    
+    // 2.2 Update & Draw Tribal Caches (Village Centers)
+    ctx.font = "bold 14px Arial";
+    ctx.textAlign = "center";
+    caches = caches.filter(cache => {
+        const saturation = cache.civilization > 0.8 ? '10%' : '70%'; 
+        const color = `hsl(${cache.tribe * 360}, ${saturation}, 50%)`;
+        
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc(cache.pos.x, cache.pos.y, 10 + cache.energy * 0.05, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = "white";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        ctx.fillStyle = "white";
+        ctx.fillText(`🏛️ ${Math.floor(cache.energy)}`, cache.pos.x, cache.pos.y - 15);
+        
+        // Caches slowly decay if not maintained
+        cache.energy *= 0.9995;
+        return cache.energy > 5;
+    });
 
     // Update Spatial Hash
     spatialHash.clear();
     agents.forEach(a => spatialHash.add(a));
 
-    // Spawn Food (Seasonal Biomes & Coastal Fertility)
-    const season = Math.sin(worldTime * 0.001); // -1 to 1 cycle
-    const seasonName = season > 0.5 ? 'SPRING' : season > -0.5 ? 'AUTUMN' : 'WINTER';
-    const seasonalFoodMult = Math.max(0.2, (season + 1) / 2); // 0.2 in winter, 1.0 in spring
-    
-    const isCrisis = agents.length < 20; // Slightly higher crisis threshold
-    const foodChance = isCrisis ? 1.0 : ((dayCycle > 0.3 && dayCycle < 0.7) ? 0.95 * seasonalFoodMult : 0.4 * seasonalFoodMult);
-    
-    // Dynamic Food Scaling: Base + Population-based bonus
-    const dynamicFoodBuffer = Math.floor(agents.length * 0.6);
-    const foodLimit = isCrisis ? CONFIG.FOOD * 2 : Math.floor((CONFIG.FOOD + dynamicFoodBuffer) * seasonalFoodMult);
+    // Calculate Total Biomass
+    let totalBiomass = 0;
+    agents.forEach(a => totalBiomass += a.energy);
+    foods.forEach(f => totalBiomass += f.energy);
+    nutrients.forEach(n => totalBiomass += n.timer * 0.1); // Estimate nutrient energy
 
-    if (isCrisis && worldTime % 100 === 0) logEvent("ECO-CRISIS: Global Bloom triggering to save life");
-
-    if (foods.length < foodLimit && Math.random() < foodChance) {
-        // Biome-aware spawning: prefer coastlines (near water edges)
-        let rx, ry;
-        const n = nutrients[Math.floor(Math.random() * nutrients.length)];
-        if (n) {
-            rx = n.pos.x + (Math.random()-0.5)*150;
-            ry = n.pos.y + (Math.random()-0.5)*150;
-        } else {
-            // Try to find a coastal spot (land near water)
-            rx = Math.random() * canvas.width;
-            ry = Math.random() * canvas.height;
-            for (let attempt = 0; attempt < 5; attempt++) {
-                const testX = Math.random() * canvas.width;
-                const testY = Math.random() * canvas.height;
-                const isLand = !terrain.isWater(testX, testY);
-                const nearWater = terrain.isWater(testX + 30, testY) || terrain.isWater(testX - 30, testY) || 
-                                  terrain.isWater(testX, testY + 30) || terrain.isWater(testX, testY - 30);
-                if (isLand && nearWater) { rx = testX; ry = testY; break; }
+    // Spawn Food (Scarcity & Fertility Based)
+    if (totalBiomass < CONFIG.GLOBAL_BIOMASS) {
+        // Find a random tile. Spawns are much rarer and depend strictly on local fertility.
+        for (let attempt = 0; attempt < 3; attempt++) {
+            const tx = Math.floor(Math.random() * (canvas.width / PHERO_SCALE));
+            const ty = Math.floor(Math.random() * (canvas.height / PHERO_SCALE));
+            
+            if (fertilityGrid[ty] && fertilityGrid[ty][tx]) {
+                const fertility = fertilityGrid[ty][tx];
+                // Must not be deep water to spawn terrestrial food easily
+                const isWater = terrain.isWater(tx * PHERO_SCALE, ty * PHERO_SCALE);
+                
+                // Spring blooms boost probability, but fertility is the hard cap
+                const season = Math.sin(worldTime * 0.001);
+                const seasonalMod = Math.max(0.2, (season + 1) / 2);
+                
+                if (Math.random() < fertility * 0.05 * seasonalMod) {
+                    const rx = tx * PHERO_SCALE + Math.random() * PHERO_SCALE;
+                    const ry = ty * PHERO_SCALE + Math.random() * PHERO_SCALE;
+                    foods.push({ pos: { x: rx, y: ry }, energy: 50, gridPos: {x: tx, y: ty} });
+                    // Spawning food drains a tiny bit of potential fertility until it rests
+                    fertilityGrid[ty][tx] = Math.max(0, fertility - 0.05); 
+                    break;
+                }
             }
         }
-        foods.push({ pos: { x: rx, y: ry }, energy: 50 });
+    }
+    
+    // Fertility Regeneration (Extremely slow)
+    if (worldTime % 100 === 0) {
+        for (let y = 0; y < fertilityGrid.length; y++) {
+            for (let x = 0; x < fertilityGrid[y].length; x++) {
+                if (fertilityGrid[y][x] < 1.0) {
+                    fertilityGrid[y][x] = Math.min(1.0, fertilityGrid[y][x] + 0.001); // 10000 ticks to heal fully
+                }
+                
+                // Draw Wastelands (Dead ziemia)
+                if (fertilityGrid[y][x] < 0.2) {
+                    ctx.fillStyle = `rgba(50, 40, 30, ${0.4 - fertilityGrid[y][x]*2})`;
+                    ctx.fillRect(x * PHERO_SCALE, y * PHERO_SCALE, PHERO_SCALE, PHERO_SCALE);
+                }
+            }
+        }
     }
 
-    // Draw Nutrients & Corpses
+    // Draw Nutrients, Corpses & Rot
     ctx.globalAlpha = 0.15;
     nutrients = nutrients.filter(n => {
         if (n.isCarcass) {
@@ -500,6 +542,16 @@ function animate() {
             ctx.font = '10px Arial';
             ctx.fillText('💀', n.pos.x - 5, n.pos.y + 3);
             ctx.globalAlpha = 0.15;
+            
+            // If carcass rots completely without being scavenged, it poisons the land
+            if (n.timer < 5) {
+                const px = Math.floor(n.pos.x / PHERO_SCALE);
+                const py = Math.floor(n.pos.y / PHERO_SCALE);
+                if (fertilityGrid[py] && fertilityGrid[py][px]) {
+                    fertilityGrid[py][px] = Math.max(0, fertilityGrid[py][px] - 0.3); // Heavy rot damage
+                    particles.push(new Particle(n.pos.x, n.pos.y, "#8B0000", 1)); // Poof of rot
+                }
+            }
         } else {
             ctx.fillStyle = '#ffcc00';
             ctx.beginPath();
@@ -554,6 +606,9 @@ function animate() {
         selectedId: selectedAgent ? selectedAgent.id : null,
         keys: keys,
         pheromoneGrid: pheromoneGrid,
+        caches: caches,
+        worldTime: worldTime,
+        particles: particles,
         getNeighbors: (x, y, r) => spatialHash.getNearby(x, y, r)
     };
 
@@ -583,6 +638,29 @@ function animate() {
                     if (a.energy < 30 && cell.civilization > 0.6) {
                         a.energy += 0.1; 
                         cell.civilization -= 0.001; // Drains the city
+                    }
+
+                    // TRIBAL CACHE WITHDRAWAL: If extremely hungry, take from tribal stores
+                    const myCache = caches.find(c => Math.abs(c.tribe - a.tribeMarker) < 0.1);
+                    if (myCache && a.energy < 40 && myCache.energy > 10) {
+                        const dist = Math.hypot(a.pos.x - myCache.pos.x, a.pos.y - myCache.pos.y);
+                        if (dist < 40) {
+                            const taking = Math.min(10, myCache.energy);
+                            a.energy += taking;
+                            myCache.energy -= taking;
+                            if (a.bubbleTimer <= 0) { a.thoughtBubble = '🍴'; a.bubbleTimer = 30; }
+                        }
+                    }
+
+                    // CACHE SPAWNING: High civilization creates a physical cache
+                    if (cell.civilization > 0.7 && !caches.find(c => Math.abs(c.tribe - a.tribeMarker) < 0.1)) {
+                        caches.push({ 
+                            pos: { x: tx * TERRITORY_SCALE, y: ty * TERRITORY_SCALE }, 
+                            tribe: a.tribeMarker, 
+                            energy: 50,
+                            civilization: cell.civilization
+                        });
+                        logNarrative(`CIVILIZATION DAWN: A new Village has formed`);
                     }
                 } else {
                     a.energy -= 0.04; // Invasive penalty
@@ -666,15 +744,32 @@ function animate() {
         // Simplified Energy & Dietary Efficiency (Phase 9)
         foods = foods.filter(f => {
             const d = Math.hypot(f.pos.x - a.pos.x, f.pos.y - a.pos.y);
-            if (d < a.phenotype.size + 4) {
+            // Slightly smaller bite radius for food nodes
+            const isFoodNode = f.gridPos !== undefined;
+            if (d < a.phenotype.size + (isFoodNode ? 4 : 25)) {
                 if (a.energy >= a.maxEnergy) return true; // Full! Skip eating
 
                 let efficiency = 1.0;
                 if (a.phenotype.diet > 0.6) efficiency = 0.1;
                 else if (a.phenotype.diet < 0.4) efficiency = 1.5;
 
-                a.energy = Math.min(a.maxEnergy, a.energy + (f.energy || 25) * 2.0 * efficiency);
+                let energyValue = (f.energy || 25) * 2.0 * efficiency;
+                
+                // Overgrazing: Eating food permanently drains the tile's fertility
+                if (isFoodNode && worldTime % 5 === 0) {
+                    if (fertilityGrid[f.gridPos.y] && fertilityGrid[f.gridPos.y][f.gridPos.x]) {
+                         // A greedy grazer damages the land
+                         fertilityGrid[f.gridPos.y][f.gridPos.x] = Math.max(0, fertilityGrid[f.gridPos.y][f.gridPos.x] - 0.2);
+                    }
+                }
+
+                if (a.role === 'GATHERER' && a.energy > 120) {
+                    a.carryingFood += energyValue;
+                    return false;
+                }
+                a.energy = Math.min(a.maxEnergy, a.energy + energyValue);
                 return false;
+
             }
             return true;
         });
@@ -798,6 +893,7 @@ function updateInspector() {
     if (!selectedAgent) return;
     
     document.getElementById('ins-id').innerText = `AGE: ${selectedAgent.age}`;
+    document.getElementById('ins-action').innerText = selectedAgent.role;
     document.getElementById('g-energy').style.width = selectedAgent.energy + '%';
     document.getElementById('ins-tribe').innerText = selectedAgent.tribeMarker.toFixed(2);
     
@@ -924,6 +1020,12 @@ function updateDashboard() {
         for (let key in tribes) {
             const members = tribes[key];
             if (members.length >= 5) {
+                // Register as a historic active tribe
+                if (!activeTribesHistory.has(key)) {
+                    activeTribesHistory.add(key);
+                    logNarrative(`A new dominant species has emerged: Lineage ${key}`);
+                }
+                
                 const elder = members.sort((a, b) => b.age - a.age)[0];
                 if (elder) {
                     elder.isLeader = true;
@@ -934,6 +1036,15 @@ function updateDashboard() {
                 }
             }
         }
+        
+        // Extinction Check
+        activeTribesHistory.forEach(key => {
+            if (!tribes[key] || tribes[key].length === 0) {
+                logNarrative(`EXTINCTION: Lineage ${key} has been wiped out forever.`);
+                console.log(`%cEXTINCTION: Lineage ${key} wiped out forever`, "color: red; font-weight: bold;");
+                activeTribesHistory.delete(key);
+            }
+        });
 
         if (avgLungs > 0.4) logEvent("Mutation: Limbs developing in coastal populations");
         if (total > 100) logEvent("Event: Tribal borders forming in Ocean Biome");

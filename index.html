@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Primordial Engine | Grand Simulation</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;500;700&family=JetBrains+Mono&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div id="app">
+        <!-- Dashboard Sidebar -->
+        <aside id="dashboard" class="glass">
+            <header>
+                <h1>PRIMORDIAL ENGINE</h1>
+                <p class="ver">v2.0 Beta - Civilization Dawn</p>
+            </header>
+
+            <div class="metrics-grid">
+                <div class="metric-card">
+                    <label>Ecosystem Stability</label>
+                    <div class="value" id="stability">98%</div>
+                </div>
+                <div class="metric-card">
+                    <label>Next Climate Era</label>
+                    <div class="value" id="era-countdown">5000</div>
+                </div>
+            </div>
+
+            <section class="archetypes">
+                <h2>GENETIC TRENDS</h2>
+                <div class="legend">
+                    <div class="leg-item"><span class="dot red"></span> Lungs (Land)</div>
+                    <div class="leg-item"><span class="dot green"></span> Gills (Sea)</div>
+                    <div class="leg-item"><span class="dot blue"></span> Tribe (Identity)</div>
+                </div>
+                <div class="trend-item">
+                    <span>Terrestrial Adaptation</span>
+                    <div id="trend-land" class="trend-bar"></div>
+                </div>
+                <div class="trend-item">
+                    <span>Social Coordination</span>
+                    <div id="trend-social" class="trend-bar"></div>
+                </div>
+            </section>
+
+            <section id="inspector" class="creature-panel">
+                <h2>SPECIES INSPECTOR</h2>
+                <div id="inspector-content">
+                    <p class="placeholder">Click a creature to deconstruct its DNA...</p>
+                    <div id="agent-stats" class="hidden">
+                        <div class="stat-main">
+                            <span id="ins-id">#ID</span>
+                            <span id="ins-action" class="tag">ACTING</span>
+                        </div>
+                        <div class="gene-map">
+                            <div class="gene">
+                                <span>Lungs</span>
+                                <input type="range" id="slip-lungs" min="0" max="1" step="0.1">
+                            </div>
+                            <div class="gene">
+                                <span>Gills</span>
+                                <input type="range" id="slip-gills" min="0" max="1" step="0.1">
+                            </div>
+                            <div class="gene">
+                                <span>Aggro</span>
+                                <input type="range" id="slip-aggro" min="0" max="1" step="0.1">
+                            </div>
+                            <div class="gene">
+                                <span>Energy</span>
+                                <div class="g-bar"><div id="g-energy"></div></div>
+                            </div>
+                        </div>
+                        <div class="neural-viz">
+                            <span>NEURAL LIVE-MAP (Real-time Thought)</span>
+                            <canvas id="neural-canvas" width="200" height="120"></canvas>
+                        </div>
+                        <div class="social-intel">
+                            <p>Tribe: <span id="ins-tribe">Color</span></p>
+                            <p>Brain Output: <span id="ins-brain">Thinking...</span></p>
+                        </div>
+
+                        <div class="emotional-state">
+                            <h3>Limbic State</h3>
+                            <div class="e-bar-group">
+                                <div class="e-bar">
+                                    <label>Fear</label>
+                                    <div class="bar-bg"><div id="bar-fear" class="bar-fill fear"></div></div>
+                                </div>
+                                <div class="e-bar">
+                                    <label>Affection</label>
+                                    <div class="bar-bg"><div id="bar-affection" class="bar-fill affection"></div></div>
+                                </div>
+                                <div class="e-bar">
+                                    <label>Hunger</label>
+                                    <div class="bar-bg"><div id="bar-hunger" class="bar-fill hunger"></div></div>
+                                </div>
+                            </div>
+                        </div>
+                        <button class="save-btn" onclick="saveSelectedToVault()">💾 Save to Vault</button>
+                    </div>
+                </div>
+            </section>
+
+            <section class="events-log">
+                <h2>WORLD EVENTS</h2>
+                <div id="log-content"></div>
+            </section>
+
+            <section class="god-mode">
+                <h2>GOD MODE</h2>
+                <div class="god-controls">
+                    <button class="god-btn" onclick="setEra('ICE_AGE')">❄️ Ice</button>
+                    <button class="god-btn" onclick="setEra('HEATWAVE')">🔥 Heat</button>
+                    <button class="god-btn" onclick="toggleNutrientDrop()">🧪 Nutrients</button>
+                    <button id="ollama-btn" class="god-btn" onclick="toggleOllama()">🔮 Consciousness</button>
+                </div>
+                <div class="vault-tools">
+                    <input type="text" id="dna-import" placeholder="Paste DNA code...">
+                    <button id="import-btn" onclick="importDNA()">🧬 Import</button>
+                </div>
+            </section>
+
+            <section class="vault">
+                <h2>DNA VAULT</h2>
+                <div id="vault-list" class="vault-items">
+                    <!-- Saved species appear here -->
+                    <div class="placeholder">Vault Empty</div>
+                </div>
+            </section>
+
+            <button id="climate-btn">Initiate Random Shift</button>
+        </aside>
+
+        <!-- World Canvas -->
+        <main id="viewport">
+            <div id="news-ticker">INITIALIZING PLANETARY SENSORS...</div>
+            <canvas id="main-canvas"></canvas>
+            <div id="map-legend">
+                <span class="l-ocean">Ocean</span>
+                <span class="l-land">Land</span>
+                <span class="l-mountain">Highland</span>
+            </div>
+        </main>
+    </div>
+
+    <!-- Scripts -->
+    <script src="terrain.js"></script>
+    <script src="nn_v2.js"></script>
+    <script src="agent.js"></script>
+    <script src="ollama_brain.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>

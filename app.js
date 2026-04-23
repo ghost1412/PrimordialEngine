@@ -702,9 +702,15 @@ function animate() {
 
                 let killEfficiency = (a.phenotype.diet > 0.6) ? 1.5 : 0.8;
                 const energyGain = (target.energy / (packmates.length + 1)) * killEfficiency;
-                a.energy += energyGain;
+                
+                if (a.role === 'HUNTER') {
+                    a.carryingFood = (a.carryingFood || 0) + energyGain;
+                } else {
+                    a.energy = Math.min(a.maxEnergy, a.energy + energyGain);
+                }
                 recordEvent(a, `Hunted ${target.name}`);
             }
+
         }
 
         // Tribal Defense: Rally to protect tribe-mates

@@ -95,7 +95,9 @@ class Agent {
         const spirit = this.phenotype.spirituality;
         
         if (spirit > 0.7) this.role = 'PROPHET';
-        else if (aggro > 0.7) this.role = 'SOLDIER';
+        else if (aggro > 0.7 && diet > 0.5) this.role = 'HUNTER';
+        else if (aggro > 0.7 && diet <= 0.5) this.role = 'SOLDIER';
+        else if (diet < 0.3 && aggro < 0.3) this.role = 'FARMER';
         else if (diet < 0.3) this.role = 'GATHERER';
         else this.role = 'CITIZEN';
     }
@@ -298,8 +300,8 @@ class Agent {
                 throttle = 1.0;
                 if (this.bubbleTimer <= 0) { this.thoughtBubble = '⚔️'; this.bubbleTimer = 40; }
             }
-        } else if (this.role === 'GATHERER' && this.carryingFood > 0) {
-            // GATHERER: Return food to village cache
+        } else if ((this.role === 'GATHERER' || this.role === 'HUNTER') && this.carryingFood > 0) {
+            // GATHERER & HUNTER: Return food to village cache
             const cache = world.caches ? world.caches.find(c => Math.abs(c.tribe - this.tribeMarker) < 0.1) : null;
             if (cache) {
                 const cacheAngle = Math.atan2(cache.pos.y - this.pos.y, cache.pos.x - this.pos.x);
@@ -308,9 +310,59 @@ class Agent {
                 if (Math.hypot(cache.pos.x - this.pos.x, cache.pos.y - this.pos.y) < 30) {
                     cache.energy += this.carryingFood;
                     this.carryingFood = 0;
-                    if (this.bubbleTimer <= 0) { this.thoughtBubble = '📦'; this.bubbleTimer = 40; }
+                    if (this.bubbleTimer <= 0) { 
+                        this.thoughtBubble = this.role === 'HUNTER' ? '🍖' : '📦'; 
+                        this.bubbleTimer = 40; 
+                    }
+                }
+            } else if (this.role === 'FARMER' || this.carryingFood > 200) {
+                // Pioneer a new cache if very far away and wealthy
+                if (world.caches) {
+                    world.caches.push({ 
+                        pos: { x: this.pos.x, y: this.pos.y }, 
+                        tribe: this.tribeMarker, 
+                        energy: this.carryingFood,
+                        civilization: 1.0
+                    });
+                    this.carryingFood = 0;
+                    if (this.bubbleTimer <= 0) { this.thoughtBubble = '🏛️'; this.bubbleTimer = 60; }
                 }
             }
+        } else if (this.role === 'FARMER' && this.energy > 40) {
+            // FARMER: Restore fertility and plant crops
+            const px = Math.floor(this.pos.x / 20); // Using PHERO_SCALE roughly
+            const py = Math.floor(this.pos.y / 20);
+            if (world.fertilityGrid && world.fertilityGrid[py] && world.fertilityGrid[py][px] !== undefined) {
+                const fert = world.fertilityGrid[py][px];
+                if (fert < 0.8) {
+                    // Tilling the soil
+                    world.fertilityGrid[py][px] += 0.05;
+                    this.energy -= 0.5;
+                    throttle = 0.1; // Moving slowly to work
+                    if (world.particles && world.worldTime % 10 === 0) world.particles.push(new Particle(this.pos.x, this.pos.y, "saddlebrown", 0.5));
+                    if (this.bubbleTimer <= 0) { this.thoughtBubble = '⛏️'; this.bubbleTimer = 30; }
+                } else if (this.energy > 150) {
+                    // Plant a crop (tell the world to spawn food)
+                    this.energy -= 40;
+                    if (world.foods) world.foods.push({ pos: { x: this.pos.x, y: this.pos.y }, energy: 50, gridPos: {x: px, y: py} });
+                    if (world.particles) {
+                        for(let i=0; i<3; i++) world.particles.push(new Particle(this.pos.x, this.pos.y, "limegreen", 1.0));
+                    }
+                    if (this.bubbleTimer <= 0) { this.thoughtBubble = '🌾'; this.bubbleTimer = 40; }
+                } else {
+                    // Seek bad land
+                    this.angle += (turn - 0.5) * 0.5;
+                    throttle = 0.6;
+                }
+            }
+        } else if (this.role === 'HUNTER' && nearestPreyPos && this.energy < 150) {
+            // HUNTER HUNTING: Aggressively target prey (Allows high energy to stockpile)
+            const huntAngle = Math.atan2(nearestPreyPos.y - this.pos.y, nearestPreyPos.x - this.pos.x);
+            this.angle = this.angle * 0.2 + huntAngle * 0.8;
+            throttle = 1.0;
+            this.targetPos = nearestPreyPos;
+            this.targetType = 'agent';
+            this.chaseTarget = nearestPreyPos;
         } else if (this.phenotype.diet > 0.5 && nearestPreyPos && this.energy < 80) {
             // 2a. HUNT (Carnivores chase prey)
             const huntAngle = Math.atan2(nearestPreyPos.y - this.pos.y, nearestPreyPos.x - this.pos.x);

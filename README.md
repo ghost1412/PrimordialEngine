@@ -28,38 +28,44 @@ The engine now features deep biological mechanics that make it the ultimate "use
 
 ---
 
-## 🧬 Biological Pillars
+## 🧬 Core Biological Simulation
 The engine simulates life at a genomic level, moving beyond simple "dots on a screen."
 
-- **Mendelian Inheritance**: Every agent possesses a double-allele genome. Recessive traits can skip generations, leading to sudden "Evolutionary Leaps."
+- **Mendelian Inheritance**: Every agent possesses a double-allele genome. Recessive traits can skip generations.
 - **Morphogenesis (Metamorphosis)**: Life begins as high-vulnerability **Larvae** that must survive for 500 days before undergoing a physical transformation into adult segmented forms.
-- **Trophic Web**: Intelligent dietary archetypes—**Grazers, Hunters, and Omnivores**—compete for resources. Predators only hunt when hungry, creating a realistic Serengeti-style balance.
-- **Epidemiology**: Viral outbreaks (The Plague) spontaneously occur in high-density swarms. Only those who evolve natural immunity survive to pass on their genes.
+- **Trophic Web**: Intelligent dietary archetypes—**Grazers, Hunters, and Omnivores**—compete for resources. 
 
-## 🏛️ Sociological & Political Layers
-As tribes survive, they develop culture and sovereignty.
+## ⚖️ The Struggle & Scarcity Update
+The simulation enforces brutal realism. There are no artificial safety nets.
 
-- **Geopolitical Sovereignty**: Dynamic borders and **Nation Naming** based on tribal DNA markers (e.g., *The Great Emerald Hegemony*).
-- **Leadership (The Prophet)**: Tribes elect their oldest and wisest members as **Prophets.** These leaders guide tribal migrations using "Follow Me" commands.
-- **Theological Faith**: Creatures can recognize "Miracles" (User interactions). Nations with high faith build **Golden Temples** and pray for survival.
-- **The Great Chronicles**: Every creature has a **Life Journal** that records its history, from birth to conquest to death.
+- **Global Biomass Law**: Food does not spawn endlessly. The total energy in the entire planet is strictly capped. If populations explode, famine naturally follows.
+- **The Fertility Grid**: Over-foraging permanently damages the land, creating barren "Wastelands".
+- **Rot & Decay**: Dead bodies that aren't eaten by scavengers decay into toxic Rot, permanently poisoning the surrounding environment.
+- **Extreme Lethality**: Biomes are lethal. Small creatures freeze to death in global Ice Ages; massive creatures suffer heatstroke in Solar Flares. Adapt or go permanently extinct.
+- **Chain Extinctions**: When a dominant genetic lineage is wiped out, the world logs the extinction forever. They do not come back.
 
-## 🌎 Planetary Environment
-The world itself is a living organism.
+## 🏛️ Civilization Dawn: Roles & Society
+When creatures reach adulthood (500 days), they are assigned distinct societal roles based on their genetics:
 
-- **Thermal Eras**: The planet shifts between Glacial Maximums and Global Heatwaves, forcing populations to adapt or perish.
-- **Chemical Pheromones**: Creatures leave **Scent Trails** (mist) on the map:
-    - 🟢 **Green**: Food Discoveries
-    - 🔴 **Red**: Danger/Predator Alerts
-    - 🔵 **Blue**: Tribal Home Paths
-- **Day/Night Cycle**: Nocturnal predators gain strength in the dark, while grazers enter a high-vulnerability sleep state.
+1. 📦 **The Gatherer** (Herbivore): Collects food and returns it to the Tribal Cache to sustain the village.
+2. ⚔️ **The Soldier** (Aggressive): Protects the village borders and drives out rival tribes.
+3. 🏹 **The Hunter** (Carnivore): Actively hunts prey and carries "Meat" back to the Tribal Cache rather than eating it immediately.
+4. ✨ **The Prophet** (High Spirituality): Emits shimmering energy fields that restore energy to nearby tribe members.
+5. 🌾 **The Farmer** (Low Aggro/Herbivore): **[The Agricultural Revolution]** Seeks out barren Wastelands and spends their own energy to "till" the soil, restoring fertility and manually planting crops. Wealthy farmers can pioneer new Village Caches in distant lands.
+6. 💊 **The Healer** (Empathetic): **[The Era of Medicine]** Draws harvested Medicinal Herbs from the village cache to cure tribe-mates suffering from the Fever.
 
-## ⚡ Divine Intervention (You)
+## 🦠 The Era of Medicine
+A lethal internal system constantly threatens the world.
+
+- **The Fever**: A horrific viral plague that burns massive energy, slows agents down, and renders them in a sickly green aura. It spreads rapidly near rotting carcasses.
+- **Herbalism**: Gatherers and Farmers have a small chance to yield `Medicine` when foraging or tilling the land, which they stockpile in the Village Caches.
+- **Immunity**: If a Healer successfully cures a sick agent with Medicine, or if an agent naturally survives to old age with the disease, they gain permanent Natural Immunity.
+
+## ⚡ Divine Intervention & AI (You)
 You are the **Creator.** You do not just watch; you interfere.
 
+- **LLM Consciousness**: Powered by local `gemma3:12b` via Ollama. Click an agent to read its internal monologue as it analyzes the environment, feels fear, and strategizes for survival.
 - **Divine Possession**: Press **"P"** to inhabit any creature. Use **WASD** to lead your tribe, hunt rivals, and survive the world yourself.
-- **The DNA Vault**: Save your favorite species to a persistent "Hall of Fame" to re-seed them in future eras.
-- **God-Tools**: Drop high-impact nutrient clouds or trigger planetary climate shifts with a click.
 
 ---
 

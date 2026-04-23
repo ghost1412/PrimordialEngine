@@ -771,9 +771,16 @@ function animate() {
 
                 if (a.role === 'GATHERER' && a.energy > 120) {
                     a.carryingFood += energyValue;
+                    if (Math.random() < 0.3) {
+                        a.carryingMedicine = (a.carryingMedicine || 0) + 1;
+                        if (a.bubbleTimer <= 0) { a.thoughtBubble = '🌿'; a.bubbleTimer = 20; }
+                    }
                     return false;
                 }
                 a.energy = Math.min(a.maxEnergy, a.energy + energyValue);
+                if (a.role === 'FARMER' && Math.random() < 0.2) {
+                    a.carryingMedicine = (a.carryingMedicine || 0) + 1;
+                }
                 return false;
 
             }

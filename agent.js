@@ -65,6 +65,7 @@ class Agent {
         // Roles (Civilization Dawn)
         this.role = 'CITIZEN';
         this.carryingFood = 0;    // Gatherers can carry resources
+        this.carryingMedicine = 0; // Gatherers can find medicine
         
         // Chase State
         this.chaseTarget = null;
@@ -94,13 +95,15 @@ class Agent {
         const aggro = this.phenotype.aggro;
         const spirit = this.phenotype.spirituality;
         
-        if (spirit > 0.7) this.role = 'PROPHET';
+        if (spirit > 0.8 && aggro < 0.4) this.role = 'HEALER';
+        else if (spirit > 0.7) this.role = 'PROPHET';
         else if (aggro > 0.7 && diet > 0.5) this.role = 'HUNTER';
         else if (aggro > 0.7 && diet <= 0.5) this.role = 'SOLDIER';
         else if (diet < 0.3 && aggro < 0.3) this.role = 'FARMER';
         else if (diet < 0.3) this.role = 'GATHERER';
         else this.role = 'CITIZEN';
     }
+
 
     update(terrain, world) {
         this.age++;
@@ -309,7 +312,9 @@ class Agent {
                 throttle = 0.8;
                 if (Math.hypot(cache.pos.x - this.pos.x, cache.pos.y - this.pos.y) < 30) {
                     cache.energy += this.carryingFood;
+                    cache.medicine = (cache.medicine || 0) + this.carryingMedicine;
                     this.carryingFood = 0;
+                    this.carryingMedicine = 0;
                     if (this.bubbleTimer <= 0) { 
                         this.thoughtBubble = this.role === 'HUNTER' ? '🍖' : '📦'; 
                         this.bubbleTimer = 40; 
@@ -322,10 +327,53 @@ class Agent {
                         pos: { x: this.pos.x, y: this.pos.y }, 
                         tribe: this.tribeMarker, 
                         energy: this.carryingFood,
+                        medicine: this.carryingMedicine,
                         civilization: 1.0
                     });
                     this.carryingFood = 0;
+                    this.carryingMedicine = 0;
                     if (this.bubbleTimer <= 0) { this.thoughtBubble = '🏛️'; this.bubbleTimer = 60; }
+                }
+            }
+        } else if (this.role === 'HEALER') {
+            // HEALER: Seek out infected tribe-mates and heal them
+            const sickAlly = neighbors.find(n => n !== this && !n.dead && n.infected > 0.2);
+            if (sickAlly && this.carryingMedicine > 0) {
+                const healAngle = Math.atan2(sickAlly.pos.y - this.pos.y, sickAlly.pos.x - this.pos.x);
+                this.angle = this.angle * 0.2 + healAngle * 0.8;
+                throttle = 0.8;
+                
+                // If close enough and have energy, attempt to heal
+                if (Math.hypot(sickAlly.pos.x - this.pos.x, sickAlly.pos.y - this.pos.y) < 30 && this.energy > 40) {
+                    this.energy -= 20; 
+                    this.carryingMedicine -= 1;
+                    sickAlly.infected = Math.max(0, sickAlly.infected - 0.2); // Drop infection
+                    if (sickAlly.infected === 0) {
+                        sickAlly.immune = true; // Healed completely = natural immunity
+                        recordEvent(this, `Cured ${sickAlly.name} of Fever using Medicine`);
+                        if (world.particles) {
+                            for(let i=0; i<3; i++) world.particles.push(new Particle(sickAlly.pos.x, sickAlly.pos.y, "#00ffcc", 1.0));
+                        }
+                    }
+                    if (this.bubbleTimer <= 0) { this.thoughtBubble = '💊'; this.bubbleTimer = 40; }
+                }
+            } else {
+                // If no Medicine, head towards the cache to get Medicine
+                const cache = world.caches ? world.caches.find(c => Math.abs(c.tribe - this.tribeMarker) < 0.1) : null;
+                if (cache) {
+                    const cacheAngle = Math.atan2(cache.pos.y - this.pos.y, cache.pos.x - this.pos.x);
+                    this.angle = this.angle * 0.1 + cacheAngle * 0.9;
+                    throttle = 0.5;
+                    
+                    if (Math.hypot(cache.pos.x - this.pos.x, cache.pos.y - this.pos.y) < 30 && cache.medicine > 0) {
+                        this.carryingMedicine += 5; // Stockpile
+                        cache.medicine = Math.max(0, cache.medicine - 5);
+                        if (this.bubbleTimer <= 0) { this.thoughtBubble = '⚕️'; this.bubbleTimer = 40; }
+                    }
+                } else if (this.energy > 60) {
+                   // Forage for herbs if no cache
+                   throttle = 0.6;
+                   this.angle += (Math.random() - 0.5);
                 }
             }
         } else if (this.role === 'FARMER' && this.energy > 40) {
@@ -470,30 +518,48 @@ class Agent {
         
         this.energy -= metabolism;
 
-        // 5. Epidemiology (Phase 12: Viral Loop)
+        // 5. Epidemiology (The Fever)
         if (this.infected > 0 && !this.immune) {
             this.infected += 0.005;
-            this.energy -= 0.05; // Virus burns energy
+            this.energy -= 0.1; // Fever burns massive energy
+            
+            // Visual feedback for fever
+            if (world.worldTime % 30 === 0 && this.bubbleTimer <= 0) {
+                this.thoughtBubble = '🤢'; 
+                this.bubbleTimer = 20;
+            }
+            if (world.particles && Math.random() < 0.02) {
+                world.particles.push(new Particle(this.pos.x, this.pos.y, "rgba(100, 255, 100, 0.4)", 0.5));
+            }
+
             if (this.infected > 1.0) {
                 this.dead = true;
-                this.cause = "Viral Plague";
+                this.cause = "The Fever";
             }
         } else if (this.age > 2000 && this.infected > 0) {
             this.immune = true;
             this.infected = 0;
-            recordEvent(this, "Developed Natural Immunity to the Plague");
+            recordEvent(this, "Developed Natural Immunity to The Fever");
         }
 
-        // Spread the contagion
+        // Spread the contagion (Increased by Carcasses)
         if (!this.immune && this.infected === 0 && Math.random() < 0.1) {
             const sickNeighbor = neighbors.find(n => n.infected > 0.5);
             if (sickNeighbor) this.infected = 0.1;
+            else if (world.nutrients) {
+                const rottingCorpse = world.nutrients.find(n => n.isCarcass && n.timer < 300 && Math.hypot(n.pos.x - this.pos.x, n.pos.y - this.pos.y) < 40);
+                if (rottingCorpse && Math.random() < 0.05) {
+                    this.infected = 0.1; // Corpses spread disease
+                    if (this.bubbleTimer <= 0) { this.thoughtBubble = '☣️'; this.bubbleTimer = 40; }
+                }
+            }
         }
 
         // Random Outbreak (Patient Zero)
         if (worldTime % 2000 === 0 && neighbors.length > 5 && Math.random() < 0.01) {
             this.infected = 0.1;
         }
+
 
         // 5.1 Pheromone Deposit (Chemical Scent Trails)
         const px = Math.floor(this.pos.x / 20); 

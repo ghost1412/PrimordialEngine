@@ -159,7 +159,7 @@ function toggleCinematic() {
 }
 let isPossessed = false;
 let isOllamaEnabled = false;
-let ollamaBrain = new OllamaBrain("tinyllama"); // Defaults to tinyllama, user can change
+let ollamaBrain = new OllamaBrain("gemma3:12b"); // Adjusted to available gemma3:12b model
 const keys = {};
 
 function toggleOllama() {
@@ -455,9 +455,12 @@ function animate() {
     const seasonName = season > 0.5 ? 'SPRING' : season > -0.5 ? 'AUTUMN' : 'WINTER';
     const seasonalFoodMult = Math.max(0.2, (season + 1) / 2); // 0.2 in winter, 1.0 in spring
     
-    const isCrisis = agents.length < 15;
+    const isCrisis = agents.length < 20; // Slightly higher crisis threshold
     const foodChance = isCrisis ? 1.0 : ((dayCycle > 0.3 && dayCycle < 0.7) ? 0.95 * seasonalFoodMult : 0.4 * seasonalFoodMult);
-    const foodLimit = isCrisis ? CONFIG.FOOD * 2 : Math.floor(CONFIG.FOOD * seasonalFoodMult);
+    
+    // Dynamic Food Scaling: Base + Population-based bonus
+    const dynamicFoodBuffer = Math.floor(agents.length * 0.6);
+    const foodLimit = isCrisis ? CONFIG.FOOD * 2 : Math.floor((CONFIG.FOOD + dynamicFoodBuffer) * seasonalFoodMult);
 
     if (isCrisis && worldTime % 100 === 0) logEvent("ECO-CRISIS: Global Bloom triggering to save life");
 
@@ -777,7 +780,7 @@ function animate() {
     if (isOllamaEnabled && worldTime % 300 === 0 && agents.length > 0) {
         const thinker = selectedAgent || agents.find(a => a.isLeader) || agents[Math.floor(Math.random() * agents.length)];
         if (thinker && !thinker.dead) {
-            ollamaBrain.think(thinker, { agents, temperature: worldTemperature }).then(result => {
+            ollamaBrain.think(thinker, worldInterface).then(result => {
                 if (result) {
                     thinker.thoughtBubble = result.monologue;
                     thinker.bubbleTimer = 180;

@@ -116,7 +116,7 @@ class Agent {
         }
         
         // === AGING EFFECTS ===
-        const agingFactor = this.age > 3000 ? 1.5 : 1.0; // Elderly metabolize faster
+        const agingFactor = this.age > 3500 ? 1.4 : 1.0; // Slightly delayed and reduced senescence
 
         // 1. Calculate Emotions (Biological Feedback)
         let throttle = 0, turn = 0.5, broadcast = 0.5;
@@ -275,10 +275,9 @@ class Agent {
             this.targetPos = nearestFoodPos;
             this.targetType = 'food';
             this.chaseTarget = null;
-            if (this.foodMemory.length > 3) this.foodMemory.shift();
-            this.foodMemory.push({...nearestFoodPos});
-        } else if (this.energy > 50 && this.age > 100 && this.pregnant === 0) {
-            // 2.5 MATING PURSUIT: Actively seek a partner
+            if (this.bubbleTimer <= 0) { this.foodMemory.push({...nearestFoodPos}); }
+        } else if (this.energy > 80 && this.age > 100 && this.pregnant === 0) {
+            // 2.5 MATING PURSUIT: Actively seek a partner (Higher energy guard)
             const tribeThreshold = (worldTime < 3000 || world.agents.length < 80) ? 0.5 : 0.15;
             const mate = neighbors.find(n => 
                 Math.abs(n.tribeMarker - this.tribeMarker) < tribeThreshold &&
@@ -335,12 +334,12 @@ class Agent {
         // Size & Movement Penalties (Moving fast should be expensive!)
         metabolism += (this.phenotype.size / 20) * 0.08; 
         const speed = Math.hypot(this.vel.x, this.vel.y);
-        metabolism += speed * 0.1; 
-
+        metabolism += speed * 0.05; // Reduced speed penalty
+        
         if (inWater && this.phenotype.gills < 0.4) metabolism += 0.4; // Severe drowning
         if (!inWater && this.phenotype.lungs < 0.4) metabolism += 0.5; // Severe suffocation
         
-        if (this.emotions.fear > 0.6) metabolism *= 2.5; // High stress adrenaline burn
+        if (this.emotions.fear > 0.6) metabolism *= 1.6; // Softer fear penalty (from 2.5)
         
         // CHILD PROTECTION: Juveniles burn 50% less energy to give them a chance
         if (this.age < 100) metabolism *= 0.5;

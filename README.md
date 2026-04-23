@@ -5,6 +5,8 @@
 ![Simulation: Active](https://img.shields.io/badge/Simulation-Active-ff0055?style=for-the-badge)
 ![Utility: Zero](https://img.shields.io/badge/Utility-Strictly_Useless-yellow?style=for-the-badge)
 
+![Simulation Showcase](image.png)
+
 > [!CAUTION]
 > **DISCLAIMER**: This is a strictly useless pet project. It serves no commercial purpose, solves no real-world problems, and will likely just consume your CPU cycles as you watch digital dots grow, mate, and die in a simulated void. Use at your own risk of losing hours to digital voyeurism.
 

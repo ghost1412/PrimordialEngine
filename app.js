@@ -16,7 +16,9 @@ const CONFIG = {
     GLOBAL_BIOMASS: 20000, // Maximum allowed energy in the system
     MUTATION: 0.1,
     SEA_LEVEL: 0.25,
-    ERA_LENGTH: 5000 // Automatic Climate Shift every 5000 ticks
+    ERA_LENGTH: 5000, // Automatic Climate Shift every 5000 ticks
+    WORLD_WIDTH: 2000,  // Fixed world width
+    WORLD_HEIGHT: 1200  // Fixed world height
 };
 
 class SpatialHash {
@@ -71,6 +73,7 @@ let foods = [];
 let nutrients = []; 
 let particles = []; // New Particle System
 let caches = [];    // Tribal Caches (Civilization Dawn)
+let monuments = []; // Tribal Monuments (The Monument Update)
 let fertilityGrid = []; // (Struggle & Scarcity)
 let activeTribesHistory = new Set(); // To track extinction permanently
 let worldTime = 0;
@@ -110,6 +113,7 @@ function playNote(freq, type = 'sine', vol = 0.05) {
 }
 let selectedAgent = null;
 let heroLocked = false;
+let camera = { x: 0, y: 0, targetX: 0, targetY: 0, zoom: 1.0 }; // Cinematic Camera
 let planetaryNews = [];
 let isNutrientMode = false;
 let spatialHash;
@@ -183,6 +187,10 @@ window.addEventListener('keydown', (e) => {
         if (isPossessed) recordEvent(selectedAgent, "Directly possessed by the Creator");
     }
     if (e.key.toLowerCase() === 'h') toggleCinematic();
+    if (e.key.toLowerCase() === 'l' && selectedAgent) {
+        heroLocked = !heroLocked;
+        logNarrative(`CAMERA LOCK: ${heroLocked ? 'ON' : 'OFF'} (Tracking ${selectedAgent.name})`);
+    }
 });
 window.addEventListener('keyup', (e) => keys[e.key.toLowerCase()] = false);
 
@@ -276,7 +284,7 @@ function init() {
 
     terrain = new Terrain(60, 40);
     initPheromones();
-    spatialHash = new SpatialHash(canvas.width, canvas.height, 60);
+    spatialHash = new SpatialHash(CONFIG.WORLD_WIDTH, CONFIG.WORLD_HEIGHT, 60);
 
     // Initialize Territory Grid
     for (let y = 0; y < Math.ceil(canvas.height / TERRITORY_SCALE); y++) {
@@ -297,15 +305,22 @@ function init() {
 }
 
 function onResize() {
-    canvas.width = canvas.offsetWidth;
-    canvas.height = canvas.offsetHeight;
+    // Internal resolution stays fixed for simulation stability
+    canvas.width = CONFIG.WORLD_WIDTH;
+    canvas.height = CONFIG.WORLD_HEIGHT;
+    
+    // We can force the CSS to ensure it fills the container if needed
+    canvas.style.width = '100%';
+    canvas.style.height = '100%';
 }
 
 function onCanvasClick(e) {
     initAudio(); // Start audio on interaction
     const rect = canvas.getBoundingClientRect();
-    const mx = e.clientX - rect.left;
-    const my = e.clientY - rect.top;
+    
+    // Map mouse click from CSS pixels to internal canvas coordinates
+    const mx = (e.clientX - rect.left) * (canvas.width / rect.width);
+    const my = (e.clientY - rect.top) * (canvas.height / rect.height);
 
     if (isNutrientMode) {
         nutrients.push({ pos: { x: mx, y: my }, timer: 1000 });
@@ -340,9 +355,57 @@ function onCanvasClick(e) {
 function animate() {
     worldTime++;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // --- CINEMATIC CAMERA SYSTEM ---
+    if (selectedAgent && heroLocked) {
+        camera.targetX = selectedAgent.pos.x - (canvas.width / 2);
+        camera.targetY = selectedAgent.pos.y - (canvas.height / 2);
+        camera.zoom = 1.8; // Zoom in for details
+    } else {
+        camera.targetX = 0;
+        camera.targetY = 0;
+        camera.zoom = 1.0;
+    }
+    // Interpolation (Smooth Move)
+    camera.x += (camera.targetX - camera.x) * 0.1;
+    camera.y += (camera.targetY - camera.y) * 0.1;
+
+    ctx.save();
+    // Centering the zoomed camera
+    if (heroLocked) {
+        ctx.translate(canvas.width/2, canvas.height/2);
+        ctx.scale(camera.zoom, camera.zoom);
+        ctx.translate(-selectedAgent.pos.x, -selectedAgent.pos.y);
+    } else {
+        ctx.translate(-camera.x, -camera.y);
+    }
     
     // 1. Draw Terrain
     terrain.draw(ctx, canvas.width, canvas.height);
+
+    // 1.05 Draw Territorial Boundaries (The Imperial Age)
+    ctx.save();
+    for (let y = 0; y < territoryGrid.length; y++) {
+        for (let x = 0; x < territoryGrid[y].length; x++) {
+            const cell = territoryGrid[y][x];
+            if (cell && cell.tribe !== null) {
+                ctx.globalAlpha = 0.15;
+                ctx.fillStyle = `hsl(${cell.tribe * 360}, 80%, 50%)`;
+                ctx.fillRect(x * TERRITORY_SCALE, y * TERRITORY_SCALE, TERRITORY_SCALE, TERRITORY_SCALE);
+                
+                // Borders
+                ctx.globalAlpha = 0.4;
+                ctx.strokeStyle = `hsl(${cell.tribe * 360}, 100%, 40%)`;
+                if (x > 0 && territoryGrid[y][x-1].tribe !== cell.tribe) {
+                    ctx.beginPath(); ctx.moveTo(x*TERRITORY_SCALE, y*TERRITORY_SCALE); ctx.lineTo(x*TERRITORY_SCALE, (y+1)*TERRITORY_SCALE); ctx.stroke();
+                }
+                if (y > 0 && territoryGrid[y-1][x].tribe !== cell.tribe) {
+                    ctx.beginPath(); ctx.moveTo(x*TERRITORY_SCALE, y*TERRITORY_SCALE); ctx.lineTo((x+1)*TERRITORY_SCALE, y*TERRITORY_SCALE); ctx.stroke();
+                }
+            }
+        }
+    }
+    ctx.restore();
 
     // 1.1 Weather & Day Cycle Overlay (Atmosphere)
     dayCycle = (worldTime % DAY_LENGTH) / DAY_LENGTH;
@@ -472,6 +535,65 @@ function animate() {
         // Caches slowly decay if not maintained
         cache.energy *= 0.9995;
         return cache.energy > 5;
+    });
+
+    // 2.3 Update & Draw Tribal Monuments (The Monument Update)
+    monuments = monuments.filter(mon => {
+        const saturation = mon.civilization > 0.8 ? '10%' : '70%';
+        const color = `hsl(${mon.tribe * 360}, ${saturation}, 60%)`;
+        
+        ctx.save();
+        ctx.translate(mon.pos.x, mon.pos.y);
+        
+        // 1. Aura Buff Effect
+        const auraAlpha = 0.1 + Math.sin(worldTime * 0.05) * 0.05;
+        ctx.fillStyle = `hsla(${mon.tribe * 360}, 100%, 70%, 0.2)`;
+        ctx.globalAlpha = auraAlpha;
+        ctx.beginPath();
+        ctx.arc(0, 0, 120, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1.0;
+
+        // 2. Structure (Grows with progress)
+        const h = 15 + mon.progress * 0.3;
+        const w = 10 + mon.progress * 0.1;
+        ctx.fillStyle = color;
+        ctx.strokeStyle = "white";
+        ctx.lineWidth = 2;
+        
+        ctx.beginPath();
+        ctx.moveTo(-w, 0);
+        ctx.lineTo(-w/2, -h);
+        ctx.lineTo(0, -h - 10);
+        ctx.lineTo(w/2, -h);
+        ctx.lineTo(w, 0);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        // Progress Text
+        ctx.fillStyle = "white";
+        ctx.font = "bold 11px Inter";
+        ctx.fillText(`TOTEM: ${Math.floor(mon.progress)}%`, 0, -h - 20);
+        
+        ctx.restore();
+
+        // 3. AoE Buff Logic
+        const nearbyAllies = spatialHash.getNearby(mon.pos.x, mon.pos.y, 120)
+            .filter(n => !n.dead && Math.abs(n.tribeMarker - mon.tribe) < 0.1);
+        
+        nearbyAllies.forEach(a => {
+            a.energy += 0.03; // Divine favor
+            if (mon.progress >= 100) {
+                a.infected = Math.max(0, a.infected - 0.005); // Disease resistance
+                a.emotions.fear *= 0.9; // Bravery buff
+            }
+        });
+
+        // Decay if tribe is extinct (mon.progress tracks health)
+        if (nearbyAllies.length === 0 && worldTime % 100 === 0) mon.progress -= 0.5;
+
+        return mon.progress > 0;
     });
 
     // Update Spatial Hash
@@ -607,6 +729,7 @@ function animate() {
         keys: keys,
         pheromoneGrid: pheromoneGrid,
         caches: caches,
+        monuments: monuments,
         worldTime: worldTime,
         particles: particles,
         getNeighbors: (x, y, r) => spatialHash.getNearby(x, y, r)
@@ -661,6 +784,19 @@ function animate() {
                             civilization: cell.civilization
                         });
                         logNarrative(`CIVILIZATION DAWN: A new Village has formed`);
+                    }
+
+                    // MONUMENT SPAWNING: Peak civilization creates a Great Monument (The Monument Update)
+                    if (cell.civilization > 0.9 && !monuments.find(m => Math.abs(m.tribe - a.tribeMarker) < 0.2)) {
+                        monuments.push({ 
+                            pos: { x: tx * TERRITORY_SCALE, y: ty * TERRITORY_SCALE }, 
+                            tribe: a.tribeMarker, 
+                            progress: 1.0 
+                        });
+                        logNarrative(`GREAT WONDER: A Monument is being raised!`);
+                        if (particles) {
+                            for(let i=0; i<10; i++) particles.push(new Particle(tx * TERRITORY_SCALE, ty * TERRITORY_SCALE, "gold", 2));
+                        }
                     }
                 } else {
                     a.energy -= 0.04; // Invasive penalty
@@ -899,21 +1035,32 @@ function animate() {
             });
         }
     }
+    ctx.restore(); // END CINEMATIC CAMERA TRANSFORM
     requestAnimationFrame(animate);
 }
 
 function updateInspector() {
     if (!selectedAgent) return;
     
-    document.getElementById('ins-id').innerText = `AGE: ${selectedAgent.age}`;
-    document.getElementById('ins-action').innerText = selectedAgent.role;
-    document.getElementById('g-energy').style.width = selectedAgent.energy + '%';
-    document.getElementById('ins-tribe').innerText = selectedAgent.tribeMarker.toFixed(2);
+    const elements = {
+        action: document.getElementById('ins-action'),
+        lineage: document.getElementById('ins-lineage'),
+        energy: document.getElementById('g-energy'),
+        tribe: document.getElementById('ins-tribe'),
+        fear: document.getElementById('bar-fear'),
+        affection: document.getElementById('bar-affection'),
+        hunger: document.getElementById('bar-hunger')
+    };
+
+    if (elements.action) elements.action.innerText = selectedAgent.role;
+    if (elements.lineage) elements.lineage.innerText = `Descendant of ${selectedAgent.motherName || "Primordial"}`;
+    if (elements.energy) elements.energy.style.width = selectedAgent.energy + '%';
+    if (elements.tribe) elements.tribe.innerText = selectedAgent.tribeMarker.toFixed(2);
     
     // Update Emotions (Limbic State)
-    document.getElementById('bar-fear').style.width = (selectedAgent.emotions.fear * 100) + '%';
-    document.getElementById('bar-affection').style.width = (selectedAgent.emotions.affection * 100) + '%';
-    document.getElementById('bar-hunger').style.width = (selectedAgent.emotions.hunger * 100) + '%';
+    if (elements.fear) elements.fear.style.width = (selectedAgent.emotions.fear * 100) + '%';
+    if (elements.affection) elements.affection.style.width = (selectedAgent.emotions.affection * 100) + '%';
+    if (elements.hunger) elements.hunger.style.width = (selectedAgent.emotions.hunger * 100) + '%';
     
     // Sync Sliders if they exist
     if (document.getElementById('slip-lungs')) {

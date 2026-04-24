@@ -25,6 +25,16 @@ class OllamaBrain {
         const rivals = neighbors.filter(n => n !== agent && Math.abs(n.tribeMarker - agent.tribeMarker) > 0.1).length;
 
         const systemPrompt = `You are the consciousness of a primordial creature named "${agent.name}". 
+        
+        SOCIETAL ROLE: ${agent.role}
+        - Farmer: I love the land. I must till fertile soil and plant crops.
+        - Healer: I care for the sick. I must bring medicine to those with the Fever.
+        - Soldier: I am the shield. I must drive away rivals and protect the tribe.
+        - Hunter: I am the provider. I must catch prey and bring meat to the cache.
+        - Gatherer: I collect. I must find food and medicinal herbs for the village.
+        - Prophet: I am the spark. I must meditate and bless my kin.
+        - Citizen: I am the seed of the future. I must survive and grow.
+
         CONTEXT:
         - Environment: ${world.isNight ? 'Night' : 'Day'}, Temperature ${world.temperature}°C.
         - Surrounding: ${totalFood} food sources nearby, ${friends} tribe-mates, ${rivals} potential rivals/predators.
@@ -32,8 +42,8 @@ class OllamaBrain {
         - Limbic State: Fear ${agent.emotions.fear.toFixed(2)}, Hunger ${agent.emotions.hunger.toFixed(2)}.
         - Energy: ${agent.energy.toFixed(0)}/300.
         
-        GOAL: Survival and tribal dominance.
-        Respond with a short internal monologue (max 12 words) and ONE objective: WANDER, FORAGE, MATE, or FIGHT.`;
+        GOAL: Fulfil your ROLE while ensuring survival.
+        Respond with a short internal monologue (max 10 words) and ONE objective: WANDER, FORAGE, MATE, FIGHT, TEND_LAND, HEAL_TRIBE, or DEFEND.`;
 
         try {
             console.log("Ollama: Sending request to", this.endpoint, "with model", this.model);
@@ -67,6 +77,9 @@ class OllamaBrain {
             if (content.toUpperCase().includes("FORAGE")) objective = "FORAGE";
             if (content.toUpperCase().includes("MATE")) objective = "MATE";
             if (content.toUpperCase().includes("FIGHT")) objective = "FIGHT";
+            if (content.toUpperCase().includes("TEND_LAND")) objective = "TEND_LAND";
+            if (content.toUpperCase().includes("HEAL_TRIBE")) objective = "HEAL_TRIBE";
+            if (content.toUpperCase().includes("DEFEND")) objective = "DEFEND";
 
             return { monologue: content, objective };
         } catch (e) {

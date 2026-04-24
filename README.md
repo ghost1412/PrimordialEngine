@@ -6,6 +6,7 @@
 ![Utility: Zero](https://img.shields.io/badge/Utility-Strictly_Useless-yellow?style=for-the-badge)
 
 ![Simulation Showcase](image.png)
+![Evolution Demo: Monuments & Linear Growth](evolution_demo.webp)
 
 > [!CAUTION]
 > **DISCLAIMER**: This is a strictly useless pet project. It serves no commercial purpose, solves no real-world problems, and will likely just consume your CPU cycles as you watch digital dots grow, mate, and die in a simulated void. Use at your own risk of losing hours to digital voyeurism.
@@ -25,6 +26,8 @@ The engine now features deep biological mechanics that make it the ultimate "use
 8.  **🌱 Fertile Biomes**: Food blooms preferentially on coastlines and fertile land.
 9.  **🧠 Spatial Memory**: Creatures remember and return to their last 3 food locations.
 10. **🌊 Seasonal Cycles**: Global food availability shifts between Spring blooms and Winter famines.
+11. **🖥️ Resolution Stability**: Fixed internal coordinates (2000x1200) ensure the simulation never "bunches" during window resizing.
+12. **🎥 Cinematic Follow**: Intelligent camera locking onto individual "hero" creatures with smooth interpolation.
 
 ---
 
@@ -53,6 +56,14 @@ When creatures reach adulthood (500 days), they are assigned distinct societal r
 4. ✨ **The Prophet** (High Spirituality): Emits shimmering energy fields that restore energy to nearby tribe members.
 5. 🌾 **The Farmer** (Low Aggro/Herbivore): **[The Agricultural Revolution]** Seeks out barren Wastelands and spends their own energy to "till" the soil, restoring fertility and manually planting crops. Wealthy farmers can pioneer new Village Caches in distant lands.
 6. 💊 **The Healer** (Empathetic): **[The Era of Medicine]** Draws harvested Medicinal Herbs from the village cache to cure tribe-mates suffering from the Fever.
+7. 🚩 **The Settler** (Vanguard): **[The Imperial Expansion]** Driven to expand. Settlers prioritize finding distant, unclaimed lands to establish new colonies and monuments.
+8. 🎮 **The Socialite**: High-energy agents who engage in social "games" (spinning, tag, dancing) to build tribal affection. Look for ⚽, 🎮, and 🎉 icons.
+
+## 🗺️ The Imperial Frontiers
+Tribes now carve out their own space on the map.
+- **Territorial Borders**: Visible colored regions on the map show the current reach of each tribe.
+- **Border Patrols**: Soldiers seek out the edges of their territory to defend against rival encroachments.
+- **Dynasty Tracking**: Every agent maintains a heritage link; view their "Ancestry" in the Species Inspector.
 
 ## 🦠 The Era of Medicine
 A lethal internal system constantly threatens the world.
@@ -71,6 +82,7 @@ You are the **Creator.** You do not just watch; you interfere.
 
 ## 🛠️ Controls
 - **Click**: Spawn Nutrient Cloud.
+- **"L"**: **[Camera Lock]** Toggle the follow-camera on the selected agent for a cinematic experience.
 - **"P"**: Possess/Take Control of Selected Agent (WASD Move).
 - **"H"**: Toggle Cinematic Mode (HUD Hide).
 - **"Climate Shift"**: Manually trigger a planetary era shift.

@@ -54,6 +54,7 @@ class Agent {
         this.gender = Math.random() > 0.5 ? 'M' : 'F';
         this.pregnant = 0;        // Ticks until birth (females only)
         this.motherId = null;     // Who is my mother
+        this.motherName = parents.length > 0 ? parents[0].name : "Primordial"; 
         this.childIds = [];       // My living children
         
         // Sleep Cycle
@@ -95,13 +96,20 @@ class Agent {
         const aggro = this.phenotype.aggro;
         const spirit = this.phenotype.spirituality;
         
-        if (spirit > 0.8 && aggro < 0.4) this.role = 'HEALER';
-        else if (spirit > 0.7) this.role = 'PROPHET';
-        else if (aggro > 0.7 && diet > 0.5) this.role = 'HUNTER';
-        else if (aggro > 0.7 && diet <= 0.5) this.role = 'SOLDIER';
-        else if (diet < 0.3 && aggro < 0.3) this.role = 'FARMER';
-        else if (diet < 0.3) this.role = 'GATHERER';
-        else this.role = 'CITIZEN';
+        let newRole = 'CITIZEN';
+        if (spirit > 0.8 && aggro < 0.4) newRole = 'HEALER';
+        else if (spirit > 0.7) newRole = 'PROPHET';
+        else if (aggro > 0.7 && diet > 0.5) newRole = 'HUNTER';
+        else if (aggro > 0.7 && diet <= 0.5) newRole = 'SOLDIER';
+        else if (diet < 0.3 && aggro < 0.3) newRole = 'FARMER';
+        else if (diet < 0.3) newRole = 'GATHERER';
+        else if (Math.random() < 0.05 && this.energy > 150) newRole = 'SETTLER';
+        else newRole = 'CITIZEN';
+
+        if (this.role !== newRole) {
+            this.role = newRole;
+            this.name = `${newRole} ${this.name}`; 
+        }
     }
 
 
@@ -137,6 +145,23 @@ class Agent {
         if (this.pregnant > 0) {
             this.pregnant--;
             this.energy -= 0.03; // Extra cost of carrying
+            // Visual Bio-Trail for pregnancy
+            if (worldTime % 4 === 0) {
+                world.particles.push(new Particle(this.pos.x, this.pos.y, 'rgba(255, 105, 180, 0.5)', 0.5));
+            }
+        }
+        
+        // BIO-TRAILS (The Streamer Update)
+        if (worldTime % 6 === 0) {
+            let trailColor = 'rgba(255, 255, 255, 0.1)';
+            if (this.role === 'HEALER') trailColor = 'rgba(0, 255, 200, 0.3)';
+            else if (this.role === 'SOLDIER') trailColor = 'rgba(255, 50, 50, 0.3)';
+            else if (this.role === 'PROPHET') trailColor = 'rgba(255, 200, 0, 0.4)';
+            else if (this.role === 'FARMER') trailColor = 'rgba(100, 255, 100, 0.2)';
+            
+            if (world.particles) {
+                world.particles.push(new Particle(this.pos.x, this.pos.y, trailColor, 0.6));
+            }
         }
         
         // === AGING EFFECTS ===
@@ -403,6 +428,29 @@ class Agent {
                     throttle = 0.6;
                 }
             }
+        } else if (this.role === 'SETTLER') {
+            // SETTLER: Seek far-away unclaimed territory and found colonies
+            const tx = Math.floor(this.pos.x / 40); // TERRITORY_SCALE
+            const ty = Math.floor(this.pos.y / 40);
+            const grid = world.territoryGrid;
+            const myCell = grid ? (grid[ty] ? grid[ty][tx] : null) : null;
+            
+            if (myCell && (myCell.tribe === null || Math.abs(myCell.tribe - this.tribeMarker) < 0.1)) {
+                if (myCell.civilization < 0.9) {
+                    myCell.civilization += 0.04;
+                    this.energy -= 0.5;
+                    throttle = 0.1;
+                    if (this.bubbleTimer <= 0) { this.thoughtBubble = '🚩'; this.bubbleTimer = 60; }
+                } else {
+                    // Civilization high, wander away to find more space
+                    this.angle += (Math.random() - 0.5) * 0.5;
+                    throttle = 0.8;
+                }
+            } else {
+                // Seek until we find free land
+                this.angle += Math.sin(worldTime * 0.05) * 0.1;
+                throttle = 1.0;
+            }
         } else if (this.role === 'HUNTER' && nearestPreyPos && this.energy < 150) {
             // HUNTER HUNTING: Aggressively target prey (Allows high energy to stockpile)
             const huntAngle = Math.atan2(nearestPreyPos.y - this.pos.y, nearestPreyPos.x - this.pos.x);
@@ -428,7 +476,77 @@ class Agent {
             this.targetType = 'food';
             this.chaseTarget = null;
             if (this.bubbleTimer <= 0) { this.foodMemory.push({...nearestFoodPos}); }
-        } else if (this.energy > 80 && this.age > 100 && this.pregnant === 0) {
+        } 
+        
+        // 2.2 MONUMENT INTERACTION (The Monument Update)
+        const myMonument = world.monuments ? world.monuments.find(m => Math.abs(m.tribe - this.tribeMarker) < 0.1) : null;
+        if (myMonument && this.age > 100) {
+            const distToMon = Math.hypot(this.pos.x - myMonument.pos.x, this.pos.y - myMonument.pos.y);
+            
+            // Contribution (Work on the monument)
+            if (myMonument.progress < 100 && distToMon < 150 && this.energy > 80 && !this.chaseTarget) {
+                const monAngle = Math.atan2(myMonument.pos.y - this.pos.y, myMonument.pos.x - this.pos.x);
+                this.angle = this.angle * 0.8 + monAngle * 0.2;
+                throttle = 0.5;
+                if (distToMon < 30) {
+                    this.energy -= 0.15;
+                    myMonument.progress += 0.02;
+                    if (this.bubbleTimer <= 0) { this.thoughtBubble = '🏗️'; this.bubbleTimer = 60; }
+                }
+            }
+            
+            // Soldier Patrol/Defense (The Imperial Age)
+            if (this.role === 'SOLDIER') {
+                const intruder = neighbors.find(n => !n.dead && Math.abs(n.tribeMarker - this.tribeMarker) > 0.1 && Math.hypot(n.pos.x - myMonument.pos.x, n.pos.y - myMonument.pos.y) < 120);
+                if (intruder) {
+                    const threatAngle = Math.atan2(intruder.pos.y - this.pos.y, intruder.pos.x - this.pos.x);
+                    this.angle = this.angle * 0.1 + threatAngle * 0.9;
+                    throttle = 1.0;
+                    this.chaseTarget = intruder.pos;
+                    if (this.bubbleTimer <= 0) { this.thoughtBubble = '⚔️'; this.bubbleTimer = 40; }
+                } else {
+                    // BORDER PATROL: Seek the edge of territory
+                    const tx = Math.floor(this.pos.x / 40);
+                    const ty = Math.floor(this.pos.y / 40);
+                    const grid = world.territoryGrid;
+                    // Check if neighbors are different
+                    const isBorder = grid && grid[ty] && 
+                        ((grid[ty][tx+1] && grid[ty][tx+1].tribe !== grid[ty][tx].tribe) || 
+                         (grid[ty][tx-1] && grid[ty][tx-1].tribe !== grid[ty][tx].tribe) ||
+                         (grid[ty+1] && grid[ty+1][tx].tribe !== grid[ty][tx].tribe));
+                    
+                    if (isBorder) {
+                        this.angle += (Math.random() - 0.5) * 0.5;
+                        throttle = 0.3;
+                        if (this.bubbleTimer <= 0) { this.thoughtBubble = '🛡️'; this.bubbleTimer = 100; }
+                    } else {
+                        // Head out to the edge
+                        this.angle += 0.05;
+                        throttle = 0.7;
+                    }
+                }
+            }
+        }
+
+        // 2.3 SOCIAL PLAY & GAMES (The Imperial Age)
+        if (this.energy > 180 && this.emotions.fear < 0.2 && this.emotions.affection > 0.6) {
+            const playMate = neighbors.find(n => n !== this && !n.dead && Math.abs(n.tribeMarker - this.tribeMarker) < 0.1);
+            if (playMate) {
+                const d = Math.hypot(playMate.pos.x - this.pos.x, playMate.pos.y - this.pos.y);
+                if (d < 40) {
+                    this.angle += 0.8; // SPIN!
+                    throttle = 0.2;
+                    if (this.bubbleTimer <= 0) {
+                        const games = ['🎮', '⚽', '🎉', '🌀', '💃'];
+                        this.thoughtBubble = games[Math.floor(Math.random() * games.length)];
+                        this.bubbleTimer = 60;
+                        if (world.particles) world.particles.push(new Particle(this.pos.x, this.pos.y, "#ffcc00", 1.0));
+                    }
+                }
+            }
+        }
+
+        if (this.energy > 80 && this.age > 100 && this.pregnant === 0) {
             // 2.5 MATING PURSUIT: Actively seek a partner (Higher energy guard)
             const tribeThreshold = (worldTime < 3000 || world.agents.length < 80) ? 0.5 : 0.15;
             const mate = neighbors.find(n => 
@@ -757,25 +875,28 @@ class Agent {
         ctx.rotate(this.angle);
 
         // 4. Procedural Anatomy & Morphogenesis (Phase 14: Life Stages)
-        const isLarva = this.age < 500;
-        const segments = isLarva ? 1 : 4;
+        const growth = Math.min(1.0, this.age / 500); 
+        const segmentCount = 1 + growth * 3;
         
-        ctx.fillStyle = isLarva ? color.replace('1)', '0.5)') : color;
-        for (let i = 0; i < segments; i++) {
-            const size = isLarva ? (this.phenotype.size * 0.4) : this.phenotype.size * (1 - i * 0.2);
-            const offset = i * (this.phenotype.size * 0.8);
-            const x = -offset;
+        ctx.fillStyle = growth < 0.5 ? color.replace('1)', '0.6)') : color;
+        let currentOffset = 0;
+        for (let i = 0; i < Math.ceil(segmentCount); i++) {
+            const part = Math.min(1.0, segmentCount - i);
+            const baseSize = (this.phenotype.size * (0.4 + growth * 0.6)) * (1 - i * 0.2);
+            const size = baseSize * part;
+            const x = -currentOffset;
             const y = Math.sin(worldTime * 0.2 - i) * (Math.abs(this.vel.x) + Math.abs(this.vel.y)) * 2;
             
             ctx.beginPath();
-            if (this.phenotype.diet > 0.6 && !isLarva) {
-                // Serrated Hunter segments (Only for Adults)
+            if (this.phenotype.diet > 0.6 && growth > 0.9) {
+                // Serrated Hunter segments (Only for Mature Adults)
                 ctx.rect(x - size/2, y - size/2, size, size);
             } else {
                 // Smooth Grazer/Larva segments
                 ctx.arc(x, y, size, 0, Math.PI * 2);
             }
             ctx.fill();
+            currentOffset += size * 0.8;
 
             // 4.1 Draw Eyes on Head (Segment 0)
             if (i === 0) {
